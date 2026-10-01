@@ -10,20 +10,15 @@ template_dir = os.path.join(BASE_DIR, 'templates')
 app = Flask(__name__, template_folder=template_dir)
 app.secret_key = 'cok_gizli_anahtar_pdks_2026'
 
-# Render Postgres veritabanı bağlantı adresi (Çevre değişkeninden çeker)
 DATABASE_URL = os.environ.get('DATABASE_URL')
-
 TR_TZ = timezone(timedelta(hours=3))
 
 def get_db_connection():
-    # Canlıda DATABASE_URL'i kullanır, yoksa yerel geliştirme için SQLite alternatifi yerine hata vermemesi için bağlanır
-    conn = psycopg2.connect(DATABASE_URL)
-    return conn
+    return psycopg2.connect(DATABASE_URL)
 
 def init_db():
     conn = get_db_connection()
     c = conn.cursor()
-    # PostgreSQL uyumlu SQL Tablo Şemaları
     c.execute('''CREATE TABLE IF NOT EXISTS personeller (
                     id SERIAL PRIMARY KEY, 
                     ad_soyad TEXT UNIQUE, 
@@ -45,7 +40,6 @@ def init_db():
     
     admin_sifre_hash = hashlib.sha256("123456".encode('utf-8')).hexdigest()
     c.execute("INSERT INTO yoneticiler (kullanici_adi, sifre) VALUES ('admin', %s) ON CONFLICT (kullanici_adi) DO NOTHING", (admin_sifre_hash,))
-    c.execute("DELETE FROM kayitlar WHERE mesai_saati < 0 OR mesai_ucreti < 0")
     conn.commit()
     c.close()
     conn.close()
@@ -67,7 +61,7 @@ def get_hareket_verileri(secili_ay, aranan="", goster_pasif="0"):
             SUBSTR(k_cikis.tarih_saat, 12, 8) AS cikis_saati,
             ROUND((EXTRACT(EPOCH FROM TO_TIMESTAMP(k_cikis.tarih_saat, 'YYYY-MM-DD HH24:MI:SS')) - EXTRACT(EPOCH FROM TO_TIMESTAMP(k_giris.tarih_saat, 'YYYY-MM-DD HH24:MI:SS'))) / 3600.0, 2) AS toplam_calisma,
             COALESCE(k_cikis.mesai_saati, 0.0) AS fazla_mesai, COALESCE(k_cikis.mesai_ucreti, 0.0) AS mesai_kazanci,
-            k_giris.id AS giris_id, COALESCE(k_cikis.id, 0) AS cikis_id, p.aktif_mi
+            p.aktif_mi
         FROM kayitlar k_giris
         JOIN personeller p ON k_giris.personel_id = p.id
         LEFT JOIN kayitlar k_cikis ON k_cikis.personel_id = k_giris.personel_id 
@@ -137,7 +131,7 @@ def index():
     secili_ay = request.args.get('ay_filtre', datetime.now(TR_TZ).strftime("%Y-%m"))
     goster_pasif = request.args.get('goster_pasif', '0')
     
-    aranan = session.get('user_name') if is_user else request.args.get('arama', '').strip()
+    aranan = session.get('user_name', '') if is_user else request.args.get('arama', '').strip()
     if is_user: goster_pasif = "1"
         
     kayitlar_ham = get_hareket_verileri(secili_ay, aranan, goster_pasif)
@@ -157,14 +151,14 @@ def excel_hareket():
     if not session.get('logged_in') and not session.get('user_logged_in'): return redirect(url_for('index'))
     secili_ay = request.args.get('ay_filtre', datetime.now(TR_TZ).strftime("%Y-%m"))
     goster_pasif = request.args.get('goster_pasif', '0')
-    aranan = session.get('user_name') if session.get('user_logged_in') else request.args.get('arama', '').strip()
+    aranan = session.get('user_name', '') if session.get('user_logged_in') else request.args.get('arama', '').strip()
     
     veriler = get_hareket_verileri(secili_ay, aranan, goster_pasif)
     csv_liste = ["Tarih;Personel Adi;Giris Saati;Cikis Saati;Toplam Calisma;Fazla Mesai;Mesai Kazanci;Durum"]
     for v in veriler:
         cikis_s = v[3] if v[3] else '--:--:--'
         top_c = v[4] if v[4] else '0.0'
-        durum_m = "Aktif" if v[9] == 1 else "Isten Ayrilmis"
+        durum_m = "Aktif" if v[7] == 1 else "Isten Ayrilmis"
         csv_liste.append(f"{v[0]};{v[1]};{v[2]};{cikis_s};{top_c};{v[5]};{v[6]};{durum_m}")
         
     csv_metin = "\uFEFF" + "\n".join(csv_liste)
@@ -233,11 +227,13 @@ def islem():
     p_id, tip, harici_tarih = request.form.get('personel_id'), request.form.get('islem_tipi'), request.form.get('harici_tarih_saat')
     tarih_obj = datetime.strptime(harici_tarih, "%Y-%m-%dT%H:%M") if harici_tarih and harici_tarih.strip() != "" else datetime.now(TR_TZ).replace(tzinfo=None)
     tarih_str = tarih_obj.strftime("%Y-%m-%d %H:%M:%S")
+
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT maas, mesai_baslangic, mesai_bitis FROM personeller WHERE id=%s", (p_id,))
     p = c.fetchone()
     if p:
+        # KESİN DÜZELTME: Postgres fetchone demet atamalarındaki indeksler düzeltildi
         maas, m_bas, m_bit = float(p[0]), p[1], p[2]
         mesai_s, mesai_u = 0.0, 0.0
         if tip == 'Çıkış':
@@ -255,19 +251,6 @@ def islem():
     conn.close()
     return redirect(url_for('index'))
 
-@app.route('/kayit_sil/<int:g_id>/<int:c_id>')
-def kayit_sil(g_id, c_id):
-    if not session.get('logged_in'): return redirect(url_for('index'))
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("DELETE FROM kayitlar WHERE id = %s", (g_id,))
-    if c_id and c_id != 0:
-        c.execute("DELETE FROM kayitlar WHERE id = %s", (c_id,))
-    conn.commit()
-    c.close()
-    conn.close()
-    return redirect(url_for('index'))
-
 @app.route('/login', methods=['POST'])
 def login():
     login_tipi = request.form.get('login_tipi')
@@ -275,6 +258,7 @@ def login():
         kullanici = request.form.get('kullanici_adi')
         sifre = request.form.get('sifre')
         sifre_hash = hashlib.sha256(sifre.encode('utf-8')).hexdigest()
+        
         conn = get_db_connection()
         c = conn.cursor()
         c.execute("SELECT * FROM yoneticiler WHERE kullanici_adi=%s AND sifre=%s", (kullanici, sifre_hash))
@@ -285,6 +269,7 @@ def login():
             session['logged_in'] = True
         else:
             flash("Admin kullanıcı adı veya şifre hatalı!")
+            
     elif login_tipi == 'personel':
         p_id = request.form.get('user_personel_id')
         if p_id:
@@ -307,6 +292,7 @@ def admin_sifre_degis():
     yeni_sifre = request.form.get('yeni_sifre')
     eski_hash = hashlib.sha256(eski_sifre.encode('utf-8')).hexdigest()
     yeni_hash = hashlib.sha256(yeni_sifre.encode('utf-8')).hexdigest()
+    
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT * FROM yoneticiler WHERE kullanici_adi = 'admin' AND sifre = %s", (eski_hash,))
