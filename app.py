@@ -19,7 +19,6 @@ def get_db_connection():
 def init_db():
     conn = get_db_connection()
     c = conn.cursor()
-    # PostgreSQL uyumlu veri tipleriyle tablolar
     c.execute('''CREATE TABLE IF NOT EXISTS personeller (
                     id SERIAL PRIMARY KEY, 
                     ad_soyad TEXT UNIQUE, 
@@ -56,7 +55,6 @@ def format_ad_soyad(ham_isim):
 def get_hareket_verileri(secili_ay, aranan="", goster_pasif="0"):
     conn = get_db_connection()
     c = conn.cursor()
-    # PostgreSQL için EXTRACT EPOCH uyumluluğu ve güvenli JOIN yapısı
     query = """
         SELECT 
             SUBSTR(k_giris.tarih_saat, 1, 10) AS tarih, p.ad_soyad, SUBSTR(k_giris.tarih_saat, 12, 8) AS giris_saati,
@@ -156,11 +154,12 @@ def excel_hareket():
     aranan = session.get('user_name', '') if session.get('user_logged_in') else request.args.get('arama', '').strip()
     
     veriler = get_hareket_verileri(secili_ay, aranan, goster_pasif)
-    csv_liste = ["Tarih;Personel Adi;Giris Saati;Cikis Saati;Toplam Calisma;Fazla Mesai;Mesai Kazanci"]
+    csv_liste = ["Tarih;Personel Adi;Giris Saati;Cikis Saati;Toplam Calisma;Fazla Mesai;Mesai Kazanci;Durum"]
     for v in veriler:
         cikis_s = v[3] if v[3] else '--:--:--'
         top_c = v[4] if v[4] else '0.0'
-        csv_liste.append(f"{v[0]};{v[1]};{v[2]};{cikis_s};{top_c};{v[5]};{v[6]}")
+        durum_m = "Aktif" if v[9] == 1 else "Isten Ayrilmis"
+        csv_liste.append(f"{v[0]};{v[1]};{v[2]};{cikis_s};{top_c};{v[5]};{v[6]};{durum_m}")
         
     csv_metin = "\uFEFF" + "\n".join(csv_liste)
     return Response(csv_metin, mimetype="text/csv", headers={"Content-disposition": f"attachment; filename=Gunluk_Hareket_Raporu_{secili_ay}.csv"})
@@ -233,7 +232,6 @@ def islem():
     c.execute("SELECT maas, mesai_baslangic, mesai_bitis FROM personeller WHERE id=%s", (p_id,))
     p = c.fetchone()
     if p:
-        # KESİN DÜZELTME: PostgreSQL tuple indeks numaraları, [1], [2] açıkça tanımlandı
         maas, m_bas, m_bit = float(p[0]), p[1], p[2]
         mesai_s, mesai_u = 0.0, 0.0
         if tip == 'Çıkış':
@@ -271,6 +269,7 @@ def login():
         kullanici = request.form.get('kullanici_adi')
         sifre = request.form.get('sifre')
         sifre_hash = hashlib.sha256(sifre.encode('utf-8')).hexdigest()
+        
         conn = get_db_connection()
         c = conn.cursor()
         c.execute("SELECT * FROM yoneticiler WHERE kullanici_adi=%s AND sifre=%s", (kullanici, sifre_hash))
