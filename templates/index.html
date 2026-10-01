@@ -3,38 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDKS - İK</title>
+    <title>PDKS</title>
     <style>
-        body { font-family: sans-serif; margin: 15px; background: #f5f7fb; color: #333; font-size: 14px; }
+        body { font-family: sans-serif; margin: 15px; background: #f5f7fb; font-size: 14px; }
         table { border-collapse: collapse; width: 100%; margin-top: 15px; background: white; }
         th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background: #2c3e50; color: white; }
         .kutu { margin-bottom: 15px; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        input, select, button { padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; width: 100%; box-sizing: border-box; margin-bottom: 10px; }
+        input, select, button { padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; width: 100%; box-sizing: border-box; margin-bottom: 10px; }
         button { background: #3182ce; color: white; font-weight: bold; cursor: pointer; border: none; }
-        .btn-excel { background: #27ae60; text-decoration: none; color: white; display: inline-block; text-align: center; font-weight: bold; border-radius: 6px; padding: 10px; }
+        .btn-excel { background: #27ae60; text-decoration: none; color: white; display: inline-block; padding: 10px; border-radius: 6px; font-weight: bold; }
         .btn-sil { background: #e74c3c; width: auto; padding: 5px 10px; font-size: 12px; border: none; border-radius: 4px; color: white; cursor: pointer; }
-        .flex-container { display: flex; flex-direction: column; gap: 10px; }
-        .badge-pasif { background: #7f8c8d; color: white; padding: 3px 6px; font-size: 11px; border-radius: 4px; }
+        .flex { display: flex; flex-direction: column; gap: 10px; }
         .login-grid { display: grid; grid-template-columns: 1fr; gap: 20px; max-width: 800px; margin: 40px auto; }
-        .hata { background: #fde8e8; color: #e74c3c; padding: 10px; border-radius: 6px; font-weight: bold; }
-        .mesaj { background: #eafaf1; color: #27ae60; padding: 10px; border-radius: 6px; font-weight: bold; }
-        @media (min-width: 768px) { .flex-container { flex-direction: row; align-items: center; justify-content: space-between; } input, select, button, .btn-excel { width: auto; margin-bottom: 0; } .login-grid { grid-template-columns: 1fr 1fr; } }
+        @media (min-width: 768px) { .flex { flex-direction: row; align-items: center; } input, select, button, .btn-excel { width: auto; margin-bottom: 0; } .login-grid { grid-template-columns: 1fr 1fr; } }
     </style>
 </head>
 <body>
     <h2>🏢 Personel Devam Kontrol Sistemi</h2>
-
     {% if not session.logged_in and not session.user_logged_in %}
-    {% with messages = get_flashed_messages() %}{% if messages %}<div class="hata">{{ messages[0] }}</div>{% endif %}{% endwith %}
     <div class="login-grid">
         <div class="kutu">
             <h3>🔑 Yönetici Girişi</h3>
             <form action="/login" method="POST">
                 <input type="hidden" name="login_tipi" value="admin">
-                <input type="text" name="kullanici_adi" placeholder="Kullanıcı Adı" required>
+                <input type="text" name="kullanici_adi" placeholder="Kullanıcı" required>
                 <input type="password" name="sifre" placeholder="Şifre" required>
-                <button type="submit" style="background:#2c3e50;">Giriş Yap</button>
+                <button type="submit">Giriş Yap</button>
             </form>
         </div>
         <div class="kutu">
@@ -42,67 +37,54 @@
             <form action="/login" method="POST">
                 <input type="hidden" name="login_tipi" value="personel">
                 <select name="user_personel_id" required>
-                    <option value="">-- İsminizi Seçin --</option>
-                    {% for p in personeller %}\n<option value="{{ p[0] }}">{{ p[1] }}</option>{% endfor %}
+                    <option value="">-- İsminiz --</option>
+                    {% for p in personeller %}<option value="{{ p[0] }}">{{ p[1] }}</option>{% endfor %}
                 </select><br><br>
                 <button type="submit" style="background:#2980b9;">Raporumu Gör</button>
             </form>
         </div>
     </div>
     {% else %}
-
-    {% with messages = get_flashed_messages() %}{% if messages %}<div class="kutu mesaj">{{ messages[0] }}</div>{% endif %}{% endwith %}
-
     {% if session.logged_in %}
     <div class="kutu">
         <h4>1. Yeni Personel Ekle</h4>
-        <form action="/personel_ekle" method="POST" class="flex-container">
+        <form action="/personel_ekle" method="POST" class="flex">
             <input type="text" name="personel_adi" placeholder="Ad Soyad" required>
-            <input type="number" name="maas" placeholder="Maaş (TL)" required>
-            <div style="display: flex; gap: 5px;">
-                <input type="time" name="mesai_baslangic" value="08:00" required>
-                <input type="time" name="mesai_bitis" value="18:00" required>
-            </div>
+            <input type="number" name="maas" placeholder="Maaş" required>
+            <input type="time" name="mesai_baslangic" value="08:00" required>
+            <input type="time" name="mesai_bitis" value="18:00" required>
             <button type="submit" style="background:#8e44ad;">Kaydet</button>
         </form>
     </div>
-
     <div class="kutu">
-        <h4>2. Giriş / Çıkış Yap</h4>
-        <form action="/islem" method="POST" class="flex-container">
+        <h4>2. İşlem Yap</h4>
+        <form action="/islem" method="POST" class="flex">
             <select name="personel_id" required>
-                <option value="">-- Personel Seçin --</option>
-                {% for p in personeller %}\n<option value="{{ p[0] }}">{{ p[1] }}</option>{% endfor %}
+                <option value="">-- Personel --</option>
+                {% for p in personeller %}<option value="{{ p[0] }}">{{ p[1] }}</option>{% endfor %}
             </select>
-            <select name="islem_tipi">
-                <option value="Giriş">🟢 Giriş</option>
-                <option value="Çıkış">🔴 Çıkış</option>
-            </select>
+            <select name="islem_tipi"><option value="Giriş">🟢 Giriş</option><option value="Çıkış">🔴 Çıkış</option></select>
             <input type="datetime-local" name="harici_tarih_saat">
             <button type="submit">Kaydet</button>
         </form>
     </div>
     {% endif %}
     <div class="kutu">
-        <h4>3. Filtreleme</h4>
-        <form action="/" method="GET" class="flex-container">
+        <h4>3. Filtrele</h4>
+        <form action="/" method="GET" class="flex">
             <input type="month" name="ay_filtre" value="{{ secili_ay }}">
             {% if session.logged_in %}
-            <input type="text" name="arama" placeholder="İsim ara..." value="{{ aranan_kelime }}">
-            <label style="font-size:13px; color:#e74c3c; cursor:pointer;"><input type="checkbox" name="goster_pasif" value="1" {% if goster_pasif == '1' %}checked{% endif %} onchange="this.form.submit()"> Ayrılanları Göster</label>
+            <input type="text" name="arama" placeholder="Ara..." value="{{ aranan_kelime }}">
+            <label><input type="checkbox" name="goster_pasif" value="1" {% if goster_pasif == '1' %}checked{% endif %} onchange="this.form.submit()"> Ayrılanlar</label>
             {% endif %}
-            <button type="submit" style="background:#f39c12;">Filtrele</button>
+            <button type="submit">Filtrele</button>
         </form>
     </div>
-
-    <div class="kutu flex-container" style="background:none; padding:0; box-shadow:none;">
+    <div class="kutu flex" style="background:none; padding:0; box-shadow:none;">
         <a href="/excel_hareket?ay_filtre={{ secili_ay }}&goster_pasif={{ goster_pasif }}" class="btn-excel">📊 Rapor İndir</a>
-        {% if session.logged_in %}
-        <a href="/excel_bordro?ay_filtre={{ secili_ay }}&goster_pasif={{ goster_pasif }}" class="btn-excel" style="background:#2980b9;">💼 Bordro İndir</a>
-        {% endif %}
-        <a href="/logout" style="text-decoration:none; width:100%;"><button type="button" style="background:#e74c3c;">Güvenli Çıkış</button></a>
+        {% if session.logged_in %}<a href="/excel_bordro?ay_filtre={{ secili_ay }}&goster_pasif={{ goster_pasif }}" class="btn-excel" style="background:#2980b9;">💼 Bordro İndir</a>{% endif %}
+        <a href="/logout" style="text-decoration:none;"><button type="button" style="background:#e74c3c;">Çıkış</button></a>
     </div>
-
     <h3>🕒 Hareket Raporu ({{ secili_ay }})</h3>
     <div style="overflow-x:auto;">
         <table>
@@ -110,20 +92,15 @@
             <tbody>
                 {% for k in kayitlar %}
                 <tr>
-                    <td>{{ k[0] }}</td>
-                    <td>{{ k[1] }} {% if k[9] == 0 %}<span class="badge-pasif">Ayrılmış</span>{% endif %}</td>
-                    <td><span style="color:#27ae60; font-weight:bold;">{{ k[2] }}</span></td>
-                    <td><span style="color:#c0392b; font-weight:bold;">{{ k[3] if k[3] else '--:--' }}</span></td>
-                    <td>{{ k[4] if k[4] else '0.0' }}</td>
-                    <td class="{% if k[5] > 0 %}renk-turuncu{% endif %}">{{ k[5] }}</td>
-                    <td class="{% if k[6] > 0 %}renk-yesil{% endif %}">{{ k[6] }} ₺</td>
+                    <td>{{ k[0] }}</td><td>{{ k[1] }} {% if k[9] == 0 %}(Ayrılmış){% endif %}</td>
+                    <td>{{ k[2] }}</td><td>{{ k[3] if k[3] else '--:--' }}</td><td>{{ k[4] if k[4] else '0.0' }}</td>
+                    <td>{{ k[5] }}</td><td>{{ k[6] }} ₺</td>
                     {% if session.logged_in %}<td><a href="/kayit_sil/{{ k[7] }}/{{ k[8] }}" onclick="return confirm('Silinsin mi?');"><button class="btn-sil">🗑️ Sil</button></a></td>{% endif %}
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
-
     <h3>💼 Bordro Özetleri ({{ secili_ay }})</h3>
     <div style="overflow-x:auto;">
         <table>
@@ -131,34 +108,23 @@
             <tbody>
                 {% for b in bordro %}
                 <tr>
-                    <td><strong>{{ b[1] }}</strong> {% if b[6] == 0 %}<span class="badge-pasif">Ayrılmış</span>{% endif %}</td>
-                    <td>{{ b[2] }} ₺</td>
-                    <td style="color:#e67e22; font-weight:bold;">{{ b[3] }} S</td>
-                    <td style="color:#27ae60; font-weight:bold;">{{ b[4] }} ₺</td>
-                    <td style="background:#e6f4ea; font-weight:bold;">{{ b[5] }} ₺</td>
-                    {% if session.logged_in %}
-                    <td>
-                        {% if b[6] == 1 %}<a href="/personel_sil/{{ b[0] }}" onclick="return confirm('Çıkartılsın mı?');"><button class="btn-sil">🗑️ Çıkart</button></a>
-                        {% else %}<span style="color:#aaa;">Pasif</span>{% endif %}
-                    </td>
-                    {% endif %}
+                    <td><strong>{{ b[1] }}</strong> {% if b[6] == 0 %}(Ayrılmış){% endif %}</td><td>{{ b[2] }} ₺</td><td>{{ b[3] }} S</td><td>{{ b[4] }} ₺</td><td style="background:#e6f4ea; font-weight:bold;">{{ b[5] }} ₺</td>
+                    {% if session.logged_in %}<td>{% if b[6] == 1 %}<a href="/personel_sil/{{ b[0] }}" onclick="return confirm('Çıkartılsın mı?');"><button class="btn-sil">🗑️ Çıkart</button></a>{% else %}-{% endif %}</td>{% endif %}
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
-
     {% if session.logged_in %}
-    <div class="kutu" style="margin-top: 30px; border-top: 3px solid #2c3e50;">
+    <div class="kutu" style="margin-top:30px; border-top:3px solid #2c3e50;">
         <h4>🔒 Şifre Değiştir</h4>
-        <form action="/admin_sifre_degis" method="POST" style="max-width: 400px;">
+        <form action="/admin_sifre_degis" method="POST" style="max-width:400px;">
             <input type="password" name="eski_sifre" placeholder="Mevcut Şifre" required>
             <input type="password" name="yeni_sifre" placeholder="Yeni Şifre" required>
             <button type="submit" style="background:#e74c3c;">Güncelle</button>
         </form>
     </div>
     {% endif %}
-
     {% endif %}
 </body>
 </html>
