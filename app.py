@@ -60,35 +60,27 @@ def format_ad_soyad(ham_isim):
 def get_hareket_verileri(secili_ay, aranan="", goster_pasif="0"):
     conn = get_db_connection()
     c = conn.cursor()
-    # PostgreSQL zaman farkı (EXTRACT EPOCH) fonksiyonu entegre edildi
     query = """
         SELECT 
-            SUBSTR(k_giris.tarih_saat, 1, 10) AS tarih, p.ad_soyad, SUBSTR(k_grid_t, 12, 8) AS giris_saati,
-            SUBSTR(k_cikis.tarih_saat, 12, 8) AS cikis_saati,
-            ROUND((EXTRACT(EPOCH FROM TO_TIMESTAMP(k_cikis.tarih_saat, 'YYYY-MM-DD HH24:MI:SS')) - EXTRACT(EPOCH FROM TO_TIMESTAMP(k_grid_t, 'YYYY-MM-DD HH24:MI:SS'))) / 3600.0, 2) AS toplam_calisma,
-            COALESCE(k_cikis.mesai_saati, 0.0) AS fazla_mesai, COALESCE(k_cikis.mesai_ucreti, 0.0) AS mesai_kazanci,
-            k_giris.id AS giris_id, COALESCE(k_cikis.id, 0) AS cikis_id, p.aktif_mi
-        FROM (SELECT id, personel_id, islem_tipi, tarih_saat, tarih_saat AS k_grid_t FROM kayitlar WHERE islem_tipi = 'Giriş') k_giris
+            SUBSTR(k_giris.tarih_saat, 1, 10), p.ad_soyad, SUBSTR(k_giris.tarih_saat, 12, 8), SUBSTR(k_cikis.tarih_saat, 12, 8),
+            COALESCE(ROUND((EXTRACT(EPOCH FROM TO_TIMESTAMP(k_cikis.tarih_saat, 'YYYY-MM-DD HH24:MI:SS')) - EXTRACT(EPOCH FROM TO_TIMESTAMP(k_giris.tarih_saat, 'YYYY-MM-DD HH24:MI:SS'))) / 3600.0, 2), 0.0),
+            COALESCE(k_cikis.mesai_saati, 0.0), COALESCE(k_cikis.mesai_ucreti, 0.0), k_giris.id, COALESCE(k_cikis.id, 0), p.aktif_mi
+        FROM kayitlar k_giris
         JOIN personeller p ON k_giris.personel_id = p.id
         LEFT JOIN kayitlar k_cikis ON k_cikis.personel_id = k_giris.personel_id 
-            AND k_cikis.islem_tipi = 'Çıkış' 
-            AND SUBSTR(k_cikis.tarih_saat, 1, 10) = SUBSTR(k_grid_t, 1, 10)
-            AND k_cikis.tarih_saat >= k_grid_t
-        WHERE SUBSTR(k_grid_t, 1, 7) = %s
+            AND k_cikis.islem_tipi = 'Çıkış' AND SUBSTR(k_cikis.tarih_saat, 1, 10) = SUBSTR(k_giris.tarih_saat, 1, 10) AND k_cikis.tarih_saat >= k_giris.tarih_saat
+        WHERE k_giris.islem_tipi = 'Giriş' AND SUBSTR(k_giris.tarih_saat, 1, 7) = %s
     """
     params = [secili_ay]
-    if goster_pasif != "1":
-        query += " AND p.aktif_mi = 1"
-    if aranan:
-        query += " AND p.ad_soyad LIKE %s"
-        params.append('%' + aranan + '%')
-    query += " ORDER BY k_grid_t DESC"
-    
+    if goster_pasif != "1": query += " AND p.aktif_mi = 1"
+    if aranan: query += " AND p.ad_soyad LIKE %s"; params.append('%' + aranan + '%')
+    query += " ORDER BY k_giris.tarih_saat DESC"
     c.execute(query, params)
     veriler = c.fetchall()
     c.close()
     conn.close()
     return veriler
+
 
 def get_bordro_verileri(secili_ay, goster_pasif="0"):
     conn = get_db_connection()
