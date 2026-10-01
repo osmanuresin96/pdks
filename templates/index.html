@@ -111,7 +111,7 @@
         <a href="/logout" style="text-decoration: none;"><button type="button" class="btn-cikis">Güvenli Çıkış</button></a>
     </div>
 
-    <h3>🕒 {% if session.user_logged_in %}Kişisel{% else %}Detaylı{% endif %} Hareket Raporu ({{ secili_ay }})</h3>
+       <h3>🕒 {% if session.user_logged_in %}Kişisel{% else %}Detaylı{% endif %} Hareket Raporu ({{ secili_ay }})</h3>
     <div style="overflow-x: auto;">
         <table>
             <thead>
@@ -122,15 +122,23 @@
             <tbody>
                 {% for kayit in kayitlar %}
                 <tr>
-                    <td>{{ kayit }}</td>
-                    <td>{{ kayit }} {% if kayit == 0 %}<span style="color:#aaa;">(Ayrılmış)</span>{% endif %}</td>
-                    <td><span style="color: #27ae60; font-weight: bold;">{{ kayit }}</span></td>
-                    <td><span style="color: #c0392b; font-weight: bold;">{{ kayit if kayit else '--:--' }}</span></td>
-                    <td>{{ kayit if kayit else '0.0' }}</td>
-                    <td>{{ kayit }}</td><td>{{ kayit }} ₺</td>
+                    <td>{{ kayit[0] }}</td>
+                    <td>{{ kayit[1] }} {% if kayit[9] == 0 %}<span class="badge-pasif">(Ayrılmış)</span>{% endif %}</td>
+                    <td><span style="color: #27ae60; font-weight: bold;">{{ kayit[2] }}</span></td>
+                    <td><span style="color: #c0392b; font-weight: bold;">{{ kayit[3] if kayit[3] else '--:--' }}</span></td>
+                    <td>{{ kayit[4] if kayit[4] else '0.0' }}</td>
+                    
+                    <!-- DÜZELTİLDİ: None kontrolü eklenerek kıyaslama hatası tamamen engellendi -->
+                    <td class="{% if kayit[5] and kayit[5] > 0 %}renk-turuncu{% else %}renk-gri{% endif %}">
+                        {{ kayit[5] if kayit[5] else '0.0' }}
+                    </td>
+                    <td class="{% if kayit[6] and kayit[6] > 0 %}renk-yesil{% else %}renk-gri{% endif %}">
+                        {{ kayit[6] if kayit[6] else '0.0' }} ₺
+                    </td>
+                    
                     {% if session.logged_in %}
                     <td>
-                        <a href="/kayit_sil/{{ kayit }}/{{ kayit }}" onclick="return confirm('Bu satırı silmek istediğinize emin misiniz?');">
+                        <a href="/kayit_sil/{{ kayit[7] }}/{{ kayit[8] }}" onclick="return confirm('Bu satırı silmek istediğinize emin misiniz?');">
                             <button type="button" class="btn-sil">🗑️ Sil</button>
                         </a>
                     </td>
@@ -140,6 +148,7 @@
             </tbody>
         </table>
     </div>
+
     <h3>💼 {% if session.user_logged_in %}Kişisel Maaş /{% else %}Profesyonel Hesap / Aylık{% endif %} Bordro Özeti ({{ secili_ay }})</h3>
     <div style="overflow-x: auto;">
         <table id="bordroTablosu">
