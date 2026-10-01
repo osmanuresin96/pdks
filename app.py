@@ -19,6 +19,7 @@ def get_db_connection():
 def init_db():
     conn = get_db_connection()
     c = conn.cursor()
+    # PostgreSQL uyumlu veri tipleriyle tablolar
     c.execute('''CREATE TABLE IF NOT EXISTS personeller (
                     id SERIAL PRIMARY KEY, 
                     ad_soyad TEXT UNIQUE, 
@@ -55,13 +56,14 @@ def format_ad_soyad(ham_isim):
 def get_hareket_verileri(secili_ay, aranan="", goster_pasif="0"):
     conn = get_db_connection()
     c = conn.cursor()
+    # PostgreSQL için EXTRACT EPOCH uyumluluğu ve güvenli JOIN yapısı
     query = """
         SELECT 
             SUBSTR(k_giris.tarih_saat, 1, 10) AS tarih, p.ad_soyad, SUBSTR(k_giris.tarih_saat, 12, 8) AS giris_saati,
             SUBSTR(k_cikis.tarih_saat, 12, 8) AS cikis_saati,
             ROUND((EXTRACT(EPOCH FROM TO_TIMESTAMP(k_cikis.tarih_saat, 'YYYY-MM-DD HH24:MI:SS')) - EXTRACT(EPOCH FROM TO_TIMESTAMP(k_giris.tarih_saat, 'YYYY-MM-DD HH24:MI:SS'))) / 3600.0, 2) AS toplam_calisma,
             COALESCE(k_cikis.mesai_saati, 0.0) AS fazla_mesai, COALESCE(k_cikis.mesai_ucreti, 0.0) AS mesai_kazanci,
-            p.aktif_mi
+            k_giris.id AS giris_id, COALESCE(k_cikis.id, 0) AS cikis_id, p.aktif_mi
         FROM kayitlar k_giris
         JOIN personeller p ON k_giris.personel_id = p.id
         LEFT JOIN kayitlar k_cikis ON k_cikis.personel_id = k_giris.personel_id 
@@ -154,12 +156,11 @@ def excel_hareket():
     aranan = session.get('user_name', '') if session.get('user_logged_in') else request.args.get('arama', '').strip()
     
     veriler = get_hareket_verileri(secili_ay, aranan, goster_pasif)
-    csv_liste = ["Tarih;Personel Adi;Giris Saati;Cikis Saati;Toplam Calisma;Fazla Mesai;Mesai Kazanci;Durum"]
+    csv_liste = ["Tarih;Personel Adi;Giris Saati;Cikis Saati;Toplam Calisma;Fazla Mesai;Mesai Kazanci"]
     for v in veriler:
         cikis_s = v[3] if v[3] else '--:--:--'
         top_c = v[4] if v[4] else '0.0'
-        durum_m = "Aktif" if v[7] == 1 else "Isten Ayrilmis"
-        csv_liste.append(f"{v[0]};{v[1]};{v[2]};{cikis_s};{top_c};{v[5]};{v[6]};{durum_m}")
+        csv_liste.append(f"{v[0]};{v[1]};{v[2]};{cikis_s};{top_c};{v[5]};{v[6]}")
         
     csv_metin = "\uFEFF" + "\n".join(csv_liste)
     return Response(csv_metin, mimetype="text/csv", headers={"Content-disposition": f"attachment; filename=Gunluk_Hareket_Raporu_{secili_ay}.csv"})
@@ -227,13 +228,12 @@ def islem():
     p_id, tip, harici_tarih = request.form.get('personel_id'), request.form.get('islem_tipi'), request.form.get('harici_tarih_saat')
     tarih_obj = datetime.strptime(harici_tarih, "%Y-%m-%dT%H:%M") if harici_tarih and harici_tarih.strip() != "" else datetime.now(TR_TZ).replace(tzinfo=None)
     tarih_str = tarih_obj.strftime("%Y-%m-%d %H:%M:%S")
-
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT maas, mesai_baslangic, mesai_bitis FROM personeller WHERE id=%s", (p_id,))
     p = c.fetchone()
     if p:
-        # KESİN DÜZELTME: Postgres fetchone demet atamalarındaki indeksler düzeltildi
+        # KESİN DÜZELTME: PostgreSQL tuple indeks numaraları, [1], [2] açıkça tanımlandı
         maas, m_bas, m_bit = float(p[0]), p[1], p[2]
         mesai_s, mesai_u = 0.0, 0.0
         if tip == 'Çıkış':
@@ -251,6 +251,19 @@ def islem():
     conn.close()
     return redirect(url_for('index'))
 
+@app.route('/kayit_sil/<int:g_id>/<int:c_id>')
+def kayit_sil(g_id, c_id):
+    if not session.get('logged_in'): return redirect(url_for('index'))
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM kayitlar WHERE id = %s", (g_id,))
+    if c_id and c_id != 0:
+        c.execute("DELETE FROM kayitlar WHERE id = %s", (c_id,))
+    conn.commit()
+    c.close()
+    conn.close()
+    return redirect(url_for('index'))
+
 @app.route('/login', methods=['POST'])
 def login():
     login_tipi = request.form.get('login_tipi')
@@ -258,7 +271,6 @@ def login():
         kullanici = request.form.get('kullanici_adi')
         sifre = request.form.get('sifre')
         sifre_hash = hashlib.sha256(sifre.encode('utf-8')).hexdigest()
-        
         conn = get_db_connection()
         c = conn.cursor()
         c.execute("SELECT * FROM yoneticiler WHERE kullanici_adi=%s AND sifre=%s", (kullanici, sifre_hash))
@@ -269,7 +281,6 @@ def login():
             session['logged_in'] = True
         else:
             flash("Admin kullanıcı adı veya şifre hatalı!")
-            
     elif login_tipi == 'personel':
         p_id = request.form.get('user_personel_id')
         if p_id:
