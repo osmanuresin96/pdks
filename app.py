@@ -37,10 +37,27 @@ def init_db():
 
 @app.route('/')
 def index():
-    if not session.get('logged_in'): 
-        return render_template('index.html')
-    
+    secili_ay = request.args.get('ay_filtre') or datetime.now().strftime('%Y-%m')
+    goster_pasif = request.args.get('goster_pasif', '0')
     aranan = request.args.get('arama', '').strip()
+
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+    c.execute("SELECT id, ad_soyad FROM personeller ORDER BY ad_soyad")
+    personeller = c.fetchall()
+    conn.close()
+
+    if not session.get('logged_in'):
+        return render_template(
+            'index.html',
+            personeller=personeller,
+            kayitlar=[],
+            bordro=[],
+            aranan_kelime=aranan,
+            secili_ay=secili_ay,
+            goster_pasif=goster_pasif
+        )
+
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
     
@@ -55,7 +72,9 @@ def index():
             COALESCE(k_cikis.mesai_saati, 0) AS fazla_mesai,
             COALESCE(k_cikis.mesai_ucreti, 0) AS mesai_kazanci,
             k_cikis.id AS cikis_id,
-            k_giris.id AS giris_id
+            k_giris.id AS giris_id,
+            p.id AS personel_id,
+            1 AS aktif_mi
         FROM kayitlar k_giris
         JOIN personeller p ON k_giris.personel_id = p.id
         LEFT JOIN kayitlar k_cikis ON k_cikis.personel_id = p.id 
@@ -65,20 +84,44 @@ def index():
         WHERE k_giris.islem_tipi = 'Giriş'
     """
     
-    if aranan:
-        query += " AND p.ad_soyad LIKE ? ORDER BY tarih DESC, giris_saati DESC"
-        c.execute(query, ('%' + aranan + '%',))
+    if secili_ay:
+        query += " AND SUBSTR(k_giris.tarih_saat, 1, 7) = ?"
+        params = [secili_ay]
     else:
-        query += " ORDER BY tarih DESC, giris_saati DESC"
-        c.execute(query)
-        
+        params = []
+
+    if aranan:
+        query += " AND p.ad_soyad LIKE ?"
+        params.append('%' + aranan + '%')
+
+    query += " ORDER BY tarih DESC, giris_saati DESC"
+    c.execute(query, params)
     kayitlar = c.fetchall()
-    
-    c.execute("SELECT id, ad_soyad FROM personeller")
-    personeller = c.fetchall()
+
+    bordro = []
+    c.execute("""
+        SELECT p.id, p.ad_soyad, p.maas,
+               COALESCE(SUM(CASE WHEN k.mesai_saati IS NOT NULL THEN k.mesai_saati ELSE 0 END), 0),
+               COALESCE(SUM(CASE WHEN k.mesai_ucreti IS NOT NULL THEN k.mesai_ucreti ELSE 0 END), 0),
+               p.maas + COALESCE(SUM(CASE WHEN k.mesai_ucreti IS NOT NULL THEN k.mesai_ucreti ELSE 0 END), 0),
+               1
+        FROM personeller p
+        LEFT JOIN kayitlar k ON k.personel_id = p.id AND k.islem_tipi = 'Çıkış'
+        GROUP BY p.id, p.ad_soyad, p.maas
+        ORDER BY p.ad_soyad
+    """)
+    bordro = c.fetchall()
     conn.close()
-    
-    return render_template('index.html', kayitlar=kayitlar, personeller=personeller, aranan_kelime=aranan)
+
+    return render_template(
+        'index.html',
+        kayitlar=kayitlar,
+        personeller=personeller,
+        bordro=bordro,
+        aranan_kelime=aranan,
+        secili_ay=secili_ay,
+        goster_pasif=goster_pasif
+    )
 
 @app.route('/personel_ekle', methods=['POST'])
 def personel_ekle():
